@@ -2,9 +2,16 @@ import { Request, Response } from "express";
 import { express } from "../../infrastructure/config/app";
 const protect = require("../../application/middleware/protect");
 const userModel = require("../../domain/models/UserModel");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 const router = express.Router();
+
+import {
+	comparePasswords,
+	createUser,
+	getUserByEmail,
+	hashUserPassword,
+	setUserJsonPayload,
+	signUserAndGetToken,
+} from "../../application/auth/authentication";
 
 /*
     Registration route
@@ -12,75 +19,49 @@ const router = express.Router();
     registers them and returns an auth token, along with the user object. 
 */
 
-router.post("/register", (req: any, res: Response) => {
+router.post("/register", async (req: any, res: Response) => {
 	const { firstName, lastName, email, password, age, gender } = req.body;
 
 	//validation of fields
-
 	if (!firstName || !lastName || !email || !password || !age || !gender) {
 		return res.status(400).json({
 			error: "Please Provide all fields",
 		});
 	}
 
-	//check if user exists
-	userModel.findOne({ email }).then((user: any) => {
-		if (!user) {
-			bcrypt.genSalt(10, (err: any, salt: any) => {
-				if (err) throw err;
-				bcrypt.hash(password, salt).then((newPass: String) => {
-					const newUser = {
-						firstName,
-						lastName,
-						email,
-						password: newPass,
-						age,
-						gender,
-						status: "active",
-					};
+	// check if the user exists with the email provided.
+	const user = await getUserByEmail(email);
 
-					userModel
-						.create(newUser)
-						.then((user: any) => {
-							jwt.sign(
-								{ id: user._id },
-								process.env.JWT_PRIVATE_KEY,
-								(err: any, token: String) => {
-									if (err) {
-										res.status(500).json({
-											error:
-												"An error occurred while creating account. Try again later",
-										});
-										return;
-									}
+	// user already exists
+	if (user) {
+		return res
+			.status(400)
+			.json({ error: `A User with the email ${email} exists` });
+	}
 
-									res.status(200).json({
-										data: {
-											user: {
-												id: user._id,
-												email: user.email,
-												firstName: user.firstName,
-												lastName: user.lastName,
-												status: user.status,
-												age: user.age,
-												gender: user.gender,
-												createdAt: user.created_at,
-											},
-											token,
-										},
-									});
-								},
-							);
-						})
-						.catch((err: any) => console.log(err));
-				});
+	// user does not exist. Register their details
+	if (!user) {
+		const hashedPassword = await hashUserPassword(password);
+
+		const newUser = {
+			firstName,
+			lastName,
+			email,
+			password: hashedPassword,
+			age,
+			gender,
+			status: "active",
+		};
+
+		try {
+			const payload = await createUser(newUser);
+			return res.status(200).json(payload);
+		} catch (error) {
+			res.status(500).json({
+				error: "An error occurred while creating account. Try again later",
 			});
-		} else {
-			return res
-				.status(400)
-				.json({ error: `A User with the email ${email} exists` });
 		}
-	});
+	}
 });
 
 /*
@@ -89,7 +70,7 @@ router.post("/register", (req: any, res: Response) => {
     before the user is allowed to log in. It returns the user object, along with 
 */
 
-router.post("/login", (req: any, res: Response) => {
+router.post("/login", async (req: any, res: Response) => {
 	const { email, password, role } = req.body;
 
 	//validation of fields
@@ -99,52 +80,42 @@ router.post("/login", (req: any, res: Response) => {
 		});
 	}
 
-	//check if user exists
-	userModel.findOne({ email }).then((user: any) => {
-		if (user) {
-			//Compare password matching
-			bcrypt.compare(password, user.password).then((isMatch: boolean) => {
-				if (!isMatch)
-					return res.status(400).json({
-						error: `Invalid Credentials for user with email: ${email}`,
-					});
+	// check if the user exists with the email provided.
+	const user = await getUserByEmail(email);
 
-				//if passwords do match, return the user without the password
-				jwt.sign(
-					{ id: user._id },
-					process.env.JWT_PRIVATE_KEY,
-					(err: any, token: String) => {
-						if (err) {
-							res.status(500).json({
-								error: "An Error occurred while logging in. Try again later.",
-							});
-							return;
-						}
+	if (!user) {
+		// user does not exist
+		return res
+			.status(403)
+			.json({ error: `The User with the email ${email} does not exist` });
+	}
 
-						res.status(200).json({
-							data: {
-								user: {
-									id: user._id,
-									email: user.email,
-									firstName: user.firstName,
-									lastName: user.lastName,
-									status: user.status,
-									age: user.age,
-									gender: user.gender,
-									createdAt: user.created_at,
-								},
-								token,
-							},
-						});
-					},
-				);
+	// the user exists. So we validate their credentials
+	if (user) {
+		try {
+			const isPasswordMatched: Boolean = await comparePasswords(
+				password,
+				user.password,
+			);
+
+			// check if passwords matched. If not, return an error
+			if (!isPasswordMatched) {
+				return res.status(400).json({
+					error: `Invalid Credentials for user with email: ${email}`,
+				});
+			}
+			// passwords matched. return the user, along with the token
+
+			const token = signUserAndGetToken(user._id);
+			const payload = setUserJsonPayload(user, token);
+			return res.status(200).json(payload);
+		} catch (error) {
+			res.status(500).json({
+				error:
+					"An error occurred while logging in to your account. Try again later",
 			});
-		} else {
-			return res
-				.status(400)
-				.json({ error: `The User with the email ${email} does not exist` });
 		}
-	});
+	}
 });
 
 /*
@@ -165,11 +136,7 @@ router.get("/profile", protect, (req: any, res: Response) => {
 	const user = userModel
 		.findById(req.user.id)
 		.select("-password")
-		.then((user: Object) =>
-			res.status(200).json({
-				data: user,
-			}),
-		);
+		.then((user: any) => res.status(200).json(setUserJsonPayload(user)));
 
 	if (!user) {
 		return res.status(400).json({ error: "No User Found" });
