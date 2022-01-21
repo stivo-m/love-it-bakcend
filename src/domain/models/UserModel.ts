@@ -30,6 +30,13 @@ const UserSchema = new Schema(
 			type: String,
 			required: true,
 		},
+
+		matches: {
+			type: Array,
+		},
+		dislikes: {
+			type: Array,
+		},
 	},
 	SchemaOptions,
 );

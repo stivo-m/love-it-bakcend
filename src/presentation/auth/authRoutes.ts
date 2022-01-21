@@ -12,6 +12,7 @@ import {
 	setUserJsonPayload,
 	signUserAndGetToken,
 } from "../../application/auth/authentication";
+import { formatJsonError } from "../../application/utils/errors";
 
 /*
     Registration route
@@ -24,9 +25,7 @@ router.post("/register", async (req: any, res: Response) => {
 
 	//validation of fields
 	if (!firstName || !lastName || !email || !password || !age || !gender) {
-		return res.status(400).json({
-			error: "Please Provide all fields",
-		});
+		return res.status(400).json(formatJsonError("Please Provide all fields"));
 	}
 
 	// check if the user exists with the email provided.
@@ -36,7 +35,7 @@ router.post("/register", async (req: any, res: Response) => {
 	if (user) {
 		return res
 			.status(400)
-			.json({ error: `A User with the email ${email} exists` });
+			.json(formatJsonError(`A User with the email ${email} exists`));
 	}
 
 	// user does not exist. Register their details
@@ -57,9 +56,13 @@ router.post("/register", async (req: any, res: Response) => {
 			const payload = await createUser(newUser);
 			return res.status(200).json(payload);
 		} catch (error) {
-			res.status(500).json({
-				error: "An error occurred while creating account. Try again later",
-			});
+			res
+				.status(500)
+				.json(
+					formatJsonError(
+						"An error occurred while creating account. Try again later",
+					),
+				);
 		}
 	}
 });
@@ -75,9 +78,9 @@ router.post("/login", async (req: any, res: Response) => {
 
 	//validation of fields
 	if (!email || !password) {
-		return res.status(400).json({
-			error: "Please Provide both an email and a password",
-		});
+		return res
+			.status(400)
+			.json(formatJsonError("Please Provide both an email and a password"));
 	}
 
 	// check if the user exists with the email provided.
@@ -87,7 +90,7 @@ router.post("/login", async (req: any, res: Response) => {
 		// user does not exist
 		return res
 			.status(403)
-			.json({ error: `The User with the email ${email} does not exist` });
+			.json(formatJsonError(`The User with the email ${email} does not exist`));
 	}
 
 	// the user exists. So we validate their credentials
@@ -100,9 +103,13 @@ router.post("/login", async (req: any, res: Response) => {
 
 			// check if passwords matched. If not, return an error
 			if (!isPasswordMatched) {
-				return res.status(400).json({
-					error: `Invalid Credentials for user with email: ${email}`,
-				});
+				return res
+					.status(400)
+					.json(
+						formatJsonError(
+							`Invalid Credentials for user with email: ${email}`,
+						),
+					);
 			}
 			// passwords matched. return the user, along with the token
 
@@ -110,10 +117,13 @@ router.post("/login", async (req: any, res: Response) => {
 			const payload = setUserJsonPayload(user, token);
 			return res.status(200).json(payload);
 		} catch (error) {
-			res.status(500).json({
-				error:
-					"An error occurred while logging in to your account. Try again later",
-			});
+			res
+				.status(500)
+				.json(
+					formatJsonError(
+						"An error occurred while logging in to your account. Try again later",
+					),
+				);
 		}
 	}
 });
@@ -139,7 +149,7 @@ router.get("/profile", protect, (req: any, res: Response) => {
 		.then((user: any) => res.status(200).json(setUserJsonPayload(user)));
 
 	if (!user) {
-		return res.status(400).json({ error: "No User Found" });
+		return res.status(400).json(formatJsonError("No User Found"));
 	}
 	return user;
 });
