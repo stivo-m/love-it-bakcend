@@ -5,6 +5,9 @@ const bcrypt = require("bcryptjs");
 const getUserByEmail = async (email: String) =>
 	userModel.findOne({ email }).then((user: any) => user);
 
+const getUserByID = async (id: any) =>
+	userModel.findById(id).then((user: any) => user);
+
 const hashUserPassword = async (password: String) => {
 	const salt = await bcrypt.genSalt(10);
 
@@ -72,4 +75,5 @@ export {
 	setUserJsonPayload,
 	createUser,
 	comparePasswords,
+	getUserByID,
 };

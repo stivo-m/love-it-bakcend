@@ -13,6 +13,9 @@ app.use("/api/", require("./presentation/auth/authRoutes"));
 //Chat Endpoint
 app.use("/api/chat/", require("./presentation/chat/chatRoutes"));
 
+//Match Endpoint
+app.use("/api/match/", require("./presentation/match/matchRoutes"));
+
 // start the Express server
 db.connect(process.env.MONGO_DB_URI, {}).then((_con: any) => {
 	app.listen(port, () => {
