@@ -34,7 +34,11 @@ const signUserAndGetToken = (id: any) => {
 	return jwt.sign({ id }, process.env.JWT_PRIVATE_KEY);
 };
 
-const setUserJsonPayload = (user: any, token = null) => {
+const setUserJsonPayload = (
+	user: any,
+	token = null,
+	profiles: Array<any> = [],
+) => {
 	return {
 		data: {
 			id: user._id,
@@ -45,6 +49,9 @@ const setUserJsonPayload = (user: any, token = null) => {
 			age: user.age,
 			gender: user.gender,
 			createdAt: user.created_at,
+			profiles,
+			matches: user.matches,
+			dislikes: user.dislikes,
 		},
 		token,
 	};
@@ -53,10 +60,13 @@ const setUserJsonPayload = (user: any, token = null) => {
 const createUser = async (userDetails: any) => {
 	return await userModel
 		.create(userDetails)
-		.then((user: any) => {
+		.then(async (user: any) => {
 			try {
 				const token = signUserAndGetToken(user._id);
-				return setUserJsonPayload(user, token);
+				// access the list of all other profiles that can be recommended for this user
+				const profiles = await getRecommendedProfiles(user);
+
+				return setUserJsonPayload(user, token, profiles);
 			} catch (error) {
 				// throwing this error allows the catch on the create above
 				// to return the error to the caller
@@ -68,6 +78,20 @@ const createUser = async (userDetails: any) => {
 		});
 };
 
+const getRecommendedProfiles = async (user: any) => {
+	const _users = await userModel
+		.find({})
+		.select("_id")
+		.select("firstName")
+		.select("lastName")
+		.select("age")
+		.select("gender");
+
+	return _users.filter(
+		(u: any) => !user.matches.includes(u._id) && !user.dislikes.includes(u._id),
+	);
+};
+
 export {
 	getUserByEmail,
 	hashUserPassword,
@@ -76,4 +100,5 @@ export {
 	createUser,
 	comparePasswords,
 	getUserByID,
+	getRecommendedProfiles,
 };
