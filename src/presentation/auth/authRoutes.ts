@@ -7,6 +7,7 @@ const router = express.Router();
 import {
 	comparePasswords,
 	createUser,
+	getRecommendedProfiles,
 	getUserByEmail,
 	hashUserPassword,
 	setUserJsonPayload,
@@ -114,7 +115,11 @@ router.post("/login", async (req: any, res: Response) => {
 			// passwords matched. return the user, along with the token
 
 			const token = signUserAndGetToken(user._id);
-			const payload = setUserJsonPayload(user, token);
+
+			// access the list of all other profiles that can be recommended for this user
+			const profiles = await getRecommendedProfiles(user);
+
+			const payload = setUserJsonPayload(user, token, profiles);
 			return res.status(200).json(payload);
 		} catch (error) {
 			res
